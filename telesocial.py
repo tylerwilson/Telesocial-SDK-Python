@@ -104,7 +104,7 @@ class SimpleClient:
         else:
             uri += '?'+query_string
 
-        print 'URI: {0}\nDATA: {1}'.format(uri, data)
+        #print 'URI: {0}\nDATA: {1}'.format(uri, data)
         req = urllib2.Request(uri, data) #, method=method)
 
         code = 500
@@ -128,7 +128,7 @@ class SimpleClient:
         code, data = self._do_raw(*args, **kwargs)
         try:
             js = json.loads(data)
-            print(js)
+            #print(js)
             return Response(code, json.loads(data))
         except:
             return Response(code, {})
