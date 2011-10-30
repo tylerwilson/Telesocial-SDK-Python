@@ -1,0 +1,38 @@
+
+
+Changes from 0.0.2 to 0.0.3
+---------------------------
+
+- Added derived RequestWithMethod class to more cleanly handle DELETE, HEAD and other calls via urllib
+
+- Change from using api4.bitmouth.com to sb.telesocial.com name for testing
+
+- Changed imports to allow code to be both Python 2.x and Python 3.x compatible
+
+- Changed all except clauses to use the 'as' syntax to make it Python 3.x compatible
+
+- Added 'appkey property access to make it easier to use from GUI application
+
+- Added network_id_list method to retrieve list of all Network IDs for an application
+
+- Added network_id_change method to change the phone associated with a Network ID
+
+- Changed conference_add method to clarify that it only accepts a scaler network id, not an array
+
+- Added conference_list method to retrive list of all conferences
+
+- Added a media_list method to retrieve list of all Media items for an application
+
+- Added an upload_file method that can send an MP3 audio file given a grant request
+
+- Added a download_file method to retrive an MP3 file from the server and save locally
+
+- Created a PyQt/PySide GUI application to test all API functions in the Python Telesocial API
+
+
+TODO
+----
+
+- Add methods to the 'RichClient' objects to match those added to SimpleClient
+
+- 

@@ -3,18 +3,29 @@ Module contains classes for interacting with Telesocial REST API.
 
 @copyright: Telesocial.com
 @since: 2011-07-01
-@version: 0.0.1
+@version: 0.0.3
 """
 
 
 # IMPORTS
 import json
-import urllib, urllib2
 
+try:
+    # Python 3.x versions
+    from urllib.parse import urlencode
+    from urllib.request import urlopen, Request
+    from urllib.error import URLError
+    from httplib.client import HTTPSConnection
+except:
+    # Python 2.x versions
+    from urllib import urlencode
+    from urllib2 import urlopen, Request, URLError
+    from httplib import HTTPSConnection
+    
 from collections import namedtuple
 
 # META VARIABLES
-__all__ = ['SimpleClient', 'RichClient']
+__all__ = ['SimpleClient', 'RichClient']    # This only effects clients that do 'from telesocial import *'
 
 # COMMON DEFINITIONS
 Response = namedtuple('Response', 'code data')
@@ -64,7 +75,23 @@ def deep_find(data, key):
                 r.append(a)
     return r[0]
 
-
+class RequestWithMethod(Request):
+    """
+    Derived class so we can handle other HTTP method types. Thanks to this
+    page: http://abhinandh.com/post/2383952338/making-a-http-delete-request-with-urllib2
+    """
+    
+    def __init__(self, uri, method, data=None, headers={}, origin_req_host=None, unverifiable=False):
+        self._method = method
+        Request.__init__(self, uri, data, headers, origin_req_host, unverifiable)
+        
+    def get_method(self):
+        if self._method:
+            return self._method
+        else:
+            return Request.get_method(self)
+    
+    
 # SIMPLE CLIENT
 class SimpleClient:
     """
@@ -75,7 +102,7 @@ class SimpleClient:
     @group Conference methods: conference_*
     @group Media methods: media_*
     """
-    def __init__(self, appkey, host='api4.bitmouth.com', https=False):
+    def __init__(self, appkey, host='sb.telesocial.com', https=True):
         """
         Constructor
 
@@ -89,13 +116,17 @@ class SimpleClient:
         self.appkey = appkey
         self.host = ('https://' if https else 'http://') + host
 
+    @property
+    def appkey(self):
+        return self.appkey
+        
     def _do_raw(self, uri, params=None, method='get'):
         uri = '{0}/api/rest/{1}'.format(self.host, uri)
 
         params = params or {}
         if not 'appkey' in params:
             params['appkey'] = self.appkey
-        query_string = urllib.urlencode(params, True)
+        query_string = urlencode(params, True)
         data = None
 
         method = method.upper()
@@ -105,13 +136,13 @@ class SimpleClient:
             uri += '?'+query_string
 
         #print 'URI: {0}\nDATA: {1}'.format(uri, data)
-        req = urllib2.Request(uri, data) #, method=method)
+        req = RequestWithMethod(uri, method, data) #, method=method)
 
         code = 500
         data = ''
         try:
-            f = urllib2.urlopen(req)
-        except urllib2.URLError, e:
+            f = urlopen(req)
+        except URLError as e:
             if hasattr(e, 'reason'):
                 raise TelesocialNetworkError(e)
             elif hasattr(e, 'code'):
@@ -156,7 +187,7 @@ class SimpleClient:
         code, data = self._do_raw('version')
         try:
             return tuple(map(int, data.split('.')))
-        except Exception, e:
+        except Exception as e:
             raise TelesocialServiceError(None, 'Invalid version response: {0}'.format(data))
 
 
@@ -215,6 +246,62 @@ class SimpleClient:
             return res
         raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
 
+    def network_id_list(self):
+        """
+        Returns a list of Network IDs associated with this application.
+
+        @rtype: Response
+        @return: server response
+        @raise TelesocialNetworkError: on any connection problems
+        @raise TelesocialServiceError: on invalid or unexpected response
+        """
+        uri = 'registrant'
+        res = self.get(uri)
+
+        if res.code in [200]:
+            # add the networkids if none passed, and make into an array if only one
+            # entry. this makes the client code a little cleaner
+            if 'networkids' not in res.data['NetworkidListResponse']:
+                res.data['NetworkidListResponse']['networkids'] = []
+            elif type(res.data['NetworkidListResponse']['networkids']) is not list:
+                datum = res.data['NetworkidListResponse']['networkids']
+                res.data['NetworkidListResponse']['networkids'] = [datum]
+            return res
+        raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
+        
+    def network_id_change(self, network_id, phone):
+        """
+        Changes the associated phone number with an existing Network ID.
+
+        @type network_id: string
+        @param network_id: the network ID to be registered
+        @type phone: string
+        @param phone: the phone number to relate to the network ID
+        @rtype: RegistrationResponse
+        @return: server response
+        @raise TelesocialNetworkError: on any connection problems
+        @raise TelesocialServiceError: on invalid or unexpected response
+        """
+        uri = 'registrant/{0}/{1}'.format(network_id, phone)
+        res = self.post(uri)
+
+        if 200 <= res.code < 300:
+            return res
+        raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
+        
+    def network_id_delete(self, network_id):
+        """
+        Deletes a Network ID associated with this application.
+        
+        Private method! Do not expose!
+        """
+        uri = 'registrant/{0}'.format(network_id)
+        res = self.delete(uri)
+        if res.code in [200]:
+            return res
+        raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
+    
+    
     def conference_create(self, network_id, greeting_id=None, recording_id=None):
         """
         Creates new conference call.
@@ -243,14 +330,14 @@ class SimpleClient:
             return res
         raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
 
-    def conference_add(self, conference_id, network_ids, greeting_id):
+    def conference_add(self, conference_id, network_id, greeting_id=None):
         """
-        Adds one or more network_id(s) to conference.
+        Adds a network_id to conference. Note we may want a wrapper that takes an array of network IDs.
 
         @type conference_id: string
         @param conference_id: target conference_id
-        @type network_ids: string or [string]
-        @param network_ids: one or more networkids to add to the conference
+        @type network_id: string
+        @param network_id: network ID to add to the conference
         @type greeting_id: string
         @param greeting_id: the media ID of a pre-recorded greeting,
             to be played to conference participants when they answer their phones
@@ -260,7 +347,7 @@ class SimpleClient:
         @raise TelesocialServiceError: on invalid or unexpected response
         """
         uri = 'conference/{0}'.format(conference_id)
-        params = {'networkid': network_ids, 'action': 'add'}
+        params = {'networkid': network_id, 'action': 'add'}
         if greeting_id:
             params['greetingid'] = greeting_id
         res = self.post(uri, params)
@@ -370,7 +457,58 @@ class SimpleClient:
         """
         return self.conference_mute(conference_id, network_id, False)
 
+    def conference_list(self, active=False):
+        """
+        Returns a list of all Conference/TalkSpaces associated with this application.
 
+        @type active: bool
+        @param active: whether we return just the active conferences, or all of them
+        @rtype: Response
+        @return: server response
+        @raise TelesocialNetworkError: on any connection problems
+        @raise TelesocialServiceError: on invalid or unexpected response
+        """
+        uri = 'conference'
+        params = {}
+        if active:
+            params['active'] = 'true'
+        res = self.get(uri, params)
+
+        if res.code in [200]:
+            # add the uploaded key/value if none passed, and make into an array if only one
+            # entry. this makes the client code a little cleaner
+            if 'active' not in res.data['ConferenceListResponse']:
+                res.data['ConferenceListResponse']['active'] = []
+            elif type(res.data['ConferenceListResponse']['active']) is not list:
+                datum = res.data['ConferenceListResponse']['active']
+                res.data['ConferenceListResponse']['active'] = [datum]
+            if active == False:
+                if 'inactive' not in res.data['ConferenceListResponse']:
+                    res.data['ConferenceListResponse']['inactive'] = []
+                elif type(res.data['ConferenceListResponse']['inactive']) is not list:
+                    datum = res.data['ConferenceListResponse']['inactive']
+                    res.data['ConferenceListResponse']['inactive'] = [datum]
+            return res
+        raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
+
+    def conference_details(self, conference_id):
+        """
+        Retrieves status information about the conference ID
+
+        @type conference_id: string
+        @param conference_id: the id of the media to retrieve status for
+        @rtype: Response
+        @return: server response
+        @raise TelesocialNetworkError: on any connection problems
+        @raise TelesocialServiceError: on invalid or unexpected response
+        """
+        uri = 'conference/{0}'.format(conference_id)
+        res = self.get(uri)
+
+        if 200 <= res.code < 300:
+            return res
+        raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
+        
     def media_create(self):
         """
         Creates a new Media ID.
@@ -497,7 +635,152 @@ class SimpleClient:
             return res
         raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
 
+    def media_list(self):
+        """
+        Returns a list of Media IDs associated with this application.
 
+        @rtype: Response
+        @return: server response
+        @raise TelesocialNetworkError: on any connection problems
+        @raise TelesocialServiceError: on invalid or unexpected response
+        """
+        uri = 'media'
+        res = self.get(uri)
+
+        if res.code in [200]:
+            # add the uploaded key/value if none passed, and make into an array if only one
+            # entry. this makes the client code a little cleaner
+            if 'uploaded' not in res.data['MediaidListResponse']:
+                res.data['MediaidListResponse']['uploaded'] = []
+            elif type(res.data['MediaidListResponse']['uploaded']) is not list:
+                datum = res.data['MediaidListResponse']['uploaded']
+                res.data['MediaidListResponse']['uploaded'] = [datum]
+            if 'recorded' not in res.data['MediaidListResponse']:
+                res.data['MediaidListResponse']['recorded'] = []
+            elif type(res.data['MediaidListResponse']['recorded']) is not list:
+                datum = res.data['MediaidListResponse']['recorded']
+                res.data['MediaidListResponse']['recorded'] = [datum]
+            return res
+        raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
+        
+    def upload_file(self, grant_id, file_path):
+        """
+        Uploads a file.
+        
+        @type grant_id: string
+        @param grant_id: the grant ID of the media, returned from 'request_upload_grant'
+        @type file_path: string
+        @param file_path: path to file to be uploaded
+        @rtype: string
+        @return: URL of media upon successful upload
+        @raise TelesocialNetworkError: on any connection problems
+        @raise TelesocialServiceError: on invalid or unexpected response
+        """
+        uri = '{0}/{1}'.format(self.host, 'forklift')
+
+        import os.path
+        
+        # put these in a format the AcvtiveState recipe wants:
+        #   fields is a sequence of (name, value) elements for regular form fields.
+        #   files is a sequence of (name, filename, value) elements for data to be uploaded as files
+        fields = [('grant', grant_id)]
+        fp = open(file_path, 'rb')
+        files = [('mediafile', os.path.basename(file_path), fp.read())]
+        fp.close()
+        
+        content_type, body = encode_multipart_formdata(fields, files)
+        headers = { 'Content-Type': content_type, 'Content-Length':str(len(body))}
+        request = Request(uri, body, headers)
+    
+        # from the _do_raw method above
+        code = 500
+        data = ''
+        try:
+            f = urlopen(request)
+        except URLError as e:
+            if hasattr(e, 'reason'):
+                raise TelesocialNetworkError(e)
+            elif hasattr(e, 'code'):
+                code = e.code
+                data = e.read()
+        else:
+            code = f.getcode()
+            data = f.read()
+            f.close() #       if 200 <= res.code < 300:
+    
+        # should we convert the return into a structured item, like all the other functions?
+        
+        return (code, data)
+    
+    def download_file(self, media_id, file_path):
+        """
+        Helper function to download a media file to the local file system.
+        
+        @type media_id: string
+        @param media_id: the media ID that we wish to save locally
+        @type file_path: string
+        @param file_path: path to file where we will save the data
+        @rtype: string
+        @return: URL of media upon successful upload
+        @raise TelesocialNetworkError: on any connection problems
+        @raise TelesocialServiceError: on invalid or unexpected response
+        """
+        url = None
+
+        # get the media status
+        try:
+            res = self.media_status(media_id)
+            print(res.code, res.data)
+            if 'MediaResponse' in res.data:
+                url = res.data['MediaResponse']['downloadUrl']
+        except telesocial.TelesocialError as e:
+            print(e)
+            
+        if url:
+            try:
+                # now get the data
+                f = urlopen(url)
+            except URLError as e:
+                print(e)
+            else:
+                data = f.read()
+                print(f.info())
+                f.close()
+                
+                # write out the file
+                fp = open(file_path, "wb")
+                fp.write(data)
+                fp.close()
+        
+# Derived from an ActiveState recipe here: http://code.activestate.com/recipes/146306/
+def encode_multipart_formdata(fields, files):
+    """
+    fields is a sequence of (name, value) elements for regular form fields.
+    files is a sequence of (name, filename, value) elements for data to be uploaded as files
+    Return (content_type, body) ready for httplib or urllib call
+    """
+    BOUNDARY = '----------ThIs_Is_tHe_bouNdaRY_$'
+    CRLF = '\r\n'
+    L = []
+    for (key, value) in fields:
+        L.append('--' + BOUNDARY)
+        L.append('Content-Disposition: form-data; name="%s"' % key)
+        L.append('')
+        L.append(value)
+    for (key, filename, value) in files:
+        L.append('--' + BOUNDARY)
+        L.append('Content-Disposition: form-data; name="%s"; filename="%s"' % (key, filename))
+        # We hard-code this here, since we only deal with one type. Plus, the mimetools returns audio/x-mpg, which Telesocial doesn't like
+        L.append('Content-Type: %s' % 'audio/mpeg') 
+        L.append('')
+        L.append(value)
+    L.append('--' + BOUNDARY + '--')
+    L.append('')
+    body = CRLF.join(L)
+    content_type = 'multipart/form-data; boundary=%s' % BOUNDARY
+    return content_type, body
+
+    
 # RICH CLIENT
 class RichClientItem:
     """
@@ -549,7 +832,7 @@ class RichClientItem:
     @property
     def id(self):
         """
-        Provides convinient access to item ID.
+        Provides convenient access to item ID.
 
         @rtype: string
         @return: item ID
@@ -855,7 +1138,7 @@ class Media(RichClientItem):
         if res.code == 200:
             try:
                 return res.data['MediaResponse']['downloadUrl']
-            except Exception, e:
+            except Exception as e:
                 raise TelesocialServiceError(original=e)
         return None
 
@@ -873,7 +1156,7 @@ class Media(RichClientItem):
         if res.code == 200:
             try:
                 return res.data['MediaResponse']['fileSize']
-            except Exception, e:
+            except Exception as e:
                 raise TelesocialServiceError(original=e)
         return None
 
@@ -891,7 +1174,7 @@ class Media(RichClientItem):
         res = self._c.media_request_upload_grant(self._id)
         try:
             return res.data['UploadResponse']['grantId']
-        except Exception, e:
+        except Exception as e:
             raise TelesocialServiceError(original=e)
 
     def record(self, network_id, greeting_id=None):
@@ -1030,7 +1313,7 @@ class RichClient:
         res = self._c.conference_create(network_id, greeting_id, recording_id)
         try:
             return self.get_conference(res.data['ConferenceResponse']['conferenceId'])
-        except Exception, e:
+        except Exception as e:
             raise TelesocialServiceError(original=e)
 
     def get_conference(self, id):
@@ -1057,7 +1340,7 @@ class RichClient:
         res = self._c.media_create()
         try:
             return self.get_media(res.data['MediaResponse']['mediaId'])
-        except Exception, e:
+        except Exception as e:
             raise TelesocialServiceError(original=e)
 
     def get_media(self, id):

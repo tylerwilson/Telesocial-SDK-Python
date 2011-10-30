@@ -4,7 +4,7 @@ setup(
     name='telesocial',
     #packages=['telesocial'],
     py_modules=['telesocial'],
-    version='0.0.2',
+    version='0.0.3',
     description='Telesocial REST API client library',
     author='Philip Borisov',
     author_email='philip.borisov@gmail.com',
