@@ -21,8 +21,7 @@ except:
 sys.path.append("..")
 import telesocial
 
-#API_KEY = "f180804f-5eda-4e6b-8f4e-ecea52362396" # commonly seen in many of the examples
-API_KEY = "65a1f558-1975-4cf3-9590-690e076633ba" # Python SDK-specific test key
+API_KEY = "f180804f-5eda-4e6b-8f4e-ecea52362396" # commonly seen in many of the examples
 
 
 class MyMainWindow(QtGui.QMainWindow):
@@ -42,10 +41,16 @@ class MyMainWindow(QtGui.QMainWindow):
             self.ui = ui_class() 
             self.ui.setupUi(self)
 
+        # read from a config file our key and other settings...
+        
+        # set the initial default value
+        self.ui.editAPIKey.setText(API_KEY)
+        
         self.show()
         
         # telesocial client
-        self.client = telesocial.SimpleClient(API_KEY)
+        key = str(self.ui.editAPIKey.text())
+        self.client = telesocial.SimpleClient(key)
     
     def get_api_key(self):
         return self.ui.editAPIKey.currentText()
@@ -65,6 +70,13 @@ class MyMainWindow(QtGui.QMainWindow):
         print("on_actionAbout_triggered")
         QtGui.QMessageBox.about(self, "About Me", "Simple application to test TeleSocial API")
         
+    @QtCore.Slot()
+    def on_editAPIKey_editingFinished(self):
+        print("setting API key")
+        key = str(self.ui.editAPIKey.text())
+        print("new API key is ", key)
+        self.client.appkey = key
+
     @QtCore.Slot()
     def on_buttonVersion_released(self):
         print("getting version information")
@@ -220,6 +232,7 @@ class MyMainWindow(QtGui.QMainWindow):
         try:
             res = self.client.conference_list()
             print(res.code, res.data)
+            self.showMessage(str(res.data))
             self.ui.listConferenceIDs.clear()
             for id in res.data['ConferenceListResponse']['active']:
                 QtGui.QTreeWidgetItem(self.ui.listConferenceIDs, [str(id), 'active'])
