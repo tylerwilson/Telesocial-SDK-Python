@@ -15,12 +15,10 @@ try:
     from urllib.parse import urlencode
     from urllib.request import urlopen, Request
     from urllib.error import URLError
-    from httplib.client import HTTPSConnection
 except:
     # Python 2.x versions
     from urllib import urlencode
     from urllib2 import urlopen, Request, URLError
-    from httplib import HTTPSConnection
     
 from collections import namedtuple
 
@@ -118,7 +116,11 @@ class SimpleClient:
 
     @property
     def appkey(self):
-        return self.appkey
+        return self._appkey
+        
+    @appkey.setter
+    def appkey(self, key):
+        self._appkey = key
         
     def _do_raw(self, uri, params=None, method='get'):
         uri = '{0}/api/rest/{1}'.format(self.host, uri)
@@ -136,7 +138,7 @@ class SimpleClient:
             uri += '?'+query_string
 
         #print 'URI: {0}\nDATA: {1}'.format(uri, data)
-        req = RequestWithMethod(uri, method, data) #, method=method)
+        req = RequestWithMethod(uri, method, data.encode() if data else None) #, method=method)
 
         code = 500
         data = ''
@@ -153,7 +155,7 @@ class SimpleClient:
             data = f.read()
             f.close()
 
-        return (code, data)
+        return (code, data.decode())
 
     def _do(self, *args, **kwargs):
         code, data = self._do_raw(*args, **kwargs)
@@ -186,7 +188,7 @@ class SimpleClient:
         """
         code, data = self._do_raw('version')
         try:
-            return tuple(map(int, data.split('.')))
+            return tuple(map(int, data.decode().split('.')))
         except Exception as e:
             raise TelesocialServiceError(None, 'Invalid version response: {0}'.format(data))
 
@@ -648,6 +650,7 @@ class SimpleClient:
         res = self.get(uri)
 
         if res.code in [200]:
+            print(res.data)
             # add the uploaded key/value if none passed, and make into an array if only one
             # entry. this makes the client code a little cleaner
             if 'uploaded' not in res.data['MediaidListResponse']:
@@ -730,7 +733,6 @@ class SimpleClient:
         # get the media status
         try:
             res = self.media_status(media_id)
-            print(res.code, res.data)
             if 'MediaResponse' in res.data:
                 url = res.data['MediaResponse']['downloadUrl']
         except telesocial.TelesocialError as e:
@@ -744,7 +746,6 @@ class SimpleClient:
                 print(e)
             else:
                 data = f.read()
-                print(f.info())
                 f.close()
                 
                 # write out the file

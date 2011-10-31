@@ -1,4 +1,11 @@
 
+Changes from 0.0.3 to 0.0.4
+---------------------------
+
+- Fix some Python 3.x issues (tested with Python 3.2.2 x64 on Windows)
+
+- Fix the appkey property access in SimpleClient
+
 
 Changes from 0.0.2 to 0.0.3
 ---------------------------
