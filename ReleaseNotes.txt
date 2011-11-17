@@ -1,4 +1,16 @@
 
+Changes from 0.0.4 to 0.1.0
+---------------------------
+
+- Bump version to something reasonable
+
+- Major layout changed in test GUI: everything visible in one window and no tabs.
+
+- Moved the API key setting to a Preferences dialog
+
+- Added an ini file to store API key and other values
+
+
 Changes from 0.0.3 to 0.0.4
 ---------------------------
 

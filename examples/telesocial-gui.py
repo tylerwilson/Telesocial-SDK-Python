@@ -21,7 +21,7 @@ except:
 sys.path.append("..")
 import telesocial
 
-API_KEY = "f180804f-5eda-4e6b-8f4e-ecea52362396" # commonly seen in many of the examples
+APP_KEY = "f180804f-5eda-4e6b-8f4e-ecea52362396" # commonly seen in many of the examples
 
 
 class MyMainWindow(QtGui.QMainWindow):
@@ -42,15 +42,15 @@ class MyMainWindow(QtGui.QMainWindow):
             self.ui.setupUi(self)
 
         # read from a config file our key and other settings...
+        self.settings = QtCore.QSettings('./telesocial-gui.ini', QtCore.QSettings.IniFormat)
         
-        # set the initial default value
-        self.ui.editAPIKey.setText(API_KEY)
+        # get the API/APP key. If none set, use the default
+        appkey = str(self.settings.value('appkey', APP_KEY).toString().toAscii())
         
         self.show()
         
-        # telesocial client
-        key = str(self.ui.editAPIKey.text())
-        self.client = telesocial.SimpleClient(key)
+        # telesocial client object
+        self.client = telesocial.SimpleClient(appkey)
     
     def get_api_key(self):
         return self.ui.editAPIKey.currentText()
@@ -65,6 +65,20 @@ class MyMainWindow(QtGui.QMainWindow):
         print("on_actionExit_triggered")
         self.close()
         
+    @QtCore.Slot()
+    def on_actionPreferences_triggered(self):
+        """Display and set preferences"""
+        dlg = PreferencesDialog(self)
+        # set the initial default value(s)
+        dlg.ui.editAPIKey.setText(str(self.client.appkey))
+        response = dlg.exec_()
+        print(response)
+        key = dlg.ui.editAPIKey.text()
+        if key:
+            # set new preferences and update client object
+            self.client.appkey = str(key)
+            self.settings.setValue('appkey', key)
+            
     @QtCore.Slot()
     def on_actionAbout_triggered(self):
         print("on_actionAbout_triggered")
@@ -90,21 +104,6 @@ class MyMainWindow(QtGui.QMainWindow):
     
     @QtCore.Slot()
     def on_buttonNetworkAdd_released(self):
-        """Add a new network id registration"""
-        print("adding registration")
-        try:
-            id = self.ui.editNetworkID.text()
-            phone = self.ui.editPhone.text()
-            print("id:{}, phone:{}".format(id, phone))
-            res = self.client.network_id_register(str(id), str(phone))
-            print(res.code, res.data)
-            self.showMessage(str(res.data))
-        except telesocial.TelesocialError as e:
-            self.showMessage(str(e))
-            print(e)
-            
-    @QtCore.Slot()
-    def on_buttonNetworkAdd2_released(self):
         """Add a new network id registration via popup dialog"""
         dlg = RegisterDialog(self)
 #        dlg.show()
@@ -133,7 +132,6 @@ class MyMainWindow(QtGui.QMainWindow):
             self.ui.listNetworkIDs.clear()
             for id in res.data['NetworkidListResponse']['networkids']:
                 self.ui.listNetworkIDs.addItem(str(id))
-                self.ui.listNetworkIDs2.addItem(str(id)) # for the list in the conference tab
         except telesocial.TelesocialError as e:
             print(e)
 
@@ -176,7 +174,7 @@ class MyMainWindow(QtGui.QMainWindow):
     def on_buttonConferenceCreate_released(self):
         print("creating conference")
         try:
-            network_ids = self.ui.listNetworkIDs2.selectedItems()
+            network_ids = self.ui.listNetworkIDs.selectedItems()
             if network_ids:
                 # only use the first one
                 network_id = network_ids[0].text() 
@@ -192,7 +190,7 @@ class MyMainWindow(QtGui.QMainWindow):
         if items:
             conference_id = str(items[0].text(0))
             try:
-                items2 = self.ui.listNetworkIDs2.selectedItems()
+                items2 = self.ui.listNetworkIDs.selectedItems()
                 for item2 in items2:
                     network_id = str(item2.text())
                     self.client.conference_add(conference_id, str(network_id.text()))
@@ -412,6 +410,31 @@ class RegisterDialog(QtGui.QDialog):
         return (self.ui.editID, self.ui.editPhone)
         
                 
+class PreferencesDialog(QtGui.QDialog):
+    
+    def __init__(self, parent=None):
+        super(PreferencesDialog, self).__init__(parent)
+        
+        # the GUI is loaded here
+        self.ui = None
+        
+        if 'QUiLoader' in globals():
+            # PySide
+            self.ui = loadUi("preferences-dlg.ui", self)
+        if 'uic' in globals():
+            # PyQt
+            ui_class, widget_class = uic.loadUiType("preferences-dlg.ui") 
+            self.ui = ui_class() 
+            self.ui.setupUi(self)
+
+        self.show()
+        
+    def accept(self):
+        super(PreferencesDialog, self).accept()
+        print("accept")
+        return (self.ui.editAPIKey)
+        
+
 class MyApp(QtGui.QApplication):
     
     def __init__(self):
