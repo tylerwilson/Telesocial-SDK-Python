@@ -508,6 +508,12 @@ class SimpleClient:
         res = self.get(uri)
 
         if 200 <= res.code < 300:
+            # ensure the 'participants is present and an array
+            if 'participants' not in res.data['ConferenceDetailsResponse']:
+                res.data['ConferenceDetailsResponse']['participants'] = []
+            elif type(res.data['ConferenceDetailsResponse']['participants']) is not list:
+                datum = res.data['ConferenceDetailsResponse']['participants']
+                res.data['ConferenceDetailsResponse']['participants'] = [datum]
             return res
         raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
         

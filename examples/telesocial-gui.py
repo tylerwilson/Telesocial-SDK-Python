@@ -177,8 +177,8 @@ class MyMainWindow(QtGui.QMainWindow):
             network_ids = self.ui.listNetworkIDs.selectedItems()
             if network_ids:
                 # only use the first one
-                network_id = network_ids[0].text() 
-                res = self.client.conference_create(str(network_id))
+                network_id = str(network_ids[0].text()) 
+                res = self.client.conference_create(network_id)
                 self.showMessage(str(res.data))
         except telesocial.TelesocialError as e:
             print(e)
@@ -193,9 +193,49 @@ class MyMainWindow(QtGui.QMainWindow):
                 items2 = self.ui.listNetworkIDs.selectedItems()
                 for item2 in items2:
                     network_id = str(item2.text())
-                    self.client.conference_add(conference_id, str(network_id.text()))
+                    self.client.conference_add(conference_id, network_id)
             except telesocial.TelesocialError as e:
                 print(e)
+
+    @QtCore.Slot()
+    def on_buttonConferenceRemove_released(self):
+        print("removing from conference")
+        items = self.ui.listConferenceIDs.selectedItems()
+        if items:
+            # only do one for now
+            item = items[0]
+            # check for its parent
+            parent = item.parent()
+            if parent:
+                conference_id = str(parent.text(0))
+                network_id = str(item.text(0))
+                try:
+                    self.client.conference_hangup(conference_id, network_id)
+                except telesocial.TelesocialError as e:
+                    print(e)
+
+    @QtCore.Slot()
+    def on_buttonConferenceMute_released(self):
+        print("muting network id in conference")
+        items = self.ui.listConferenceIDs.selectedItems()
+        if items:
+            # only do one for now
+            item = items[0]
+            # check for its parent
+            parent = item.parent()
+            if parent:
+                conference_id = str(parent.text(0))
+                network_id = str(item.text(0))
+                muted = str(item.text(1))
+                try:
+                    if muted == "unmuted":
+                        self.client.conference_mute(conference_id, network_id)
+                        item.setText(1, "muted")
+                    else:
+                        self.client.conference_unmute(conference_id, network_id)
+                        item.setText(1, "unmuted")
+                except telesocial.TelesocialError as e:
+                    print(e)
 
     def on_buttonConferenceClose_released(self):
         print("closing conference")
@@ -218,6 +258,10 @@ class MyMainWindow(QtGui.QMainWindow):
             try:
                 conference_id = item.text(0)
                 res = self.client.conference_details(str(conference_id))
+                for participant in res.data['ConferenceDetailsResponse']['participants']:
+                    # Add as children
+                    item.addChild(QtGui.QTreeWidgetItem([participant, "unmuted"]))
+                item.setExpanded(True)
                 print(res.code, res.data)
                 self.showMessage(str(res.data))
             except telesocial.TelesocialError as e:
@@ -251,7 +295,8 @@ class MyMainWindow(QtGui.QMainWindow):
             print(res.code, res.data)
             self.showMessage(str(res.data))
             id = res.data['MediaResponse']['mediaId']
-            self.ui.editMediaID.setText(id)
+            # add to the tree widget. perhaps best to just do a refresh
+            QtGui.QTreeWidgetItem(self.ui.listMediaIDs, [id])
         except telesocial.TelesocialError as e:
             print(e)
         
@@ -262,7 +307,11 @@ class MyMainWindow(QtGui.QMainWindow):
         if items:
             # just use the first one
             network_id = str(items[0].text())
-            media_id = str(self.ui.editMediaID.text())
+            media_id = None
+            media_items = self.ui.listMediaIDs.selectedItems()
+            if media_items:
+                media_id = str(media_items[0].text(0))
+
             if network_id and media_id:
                 try:
                     res = self.client.media_record(media_id, network_id)
@@ -297,18 +346,25 @@ class MyMainWindow(QtGui.QMainWindow):
     @QtCore.Slot()
     def on_buttonUploadGrant_released(self):
         print("requesting upload grant")
-        media_id = str(self.ui.editMediaID.text())
-        if not media_id:
-            print("Need Media ID first")
-            return
-        try:
-            res = self.client.media_request_upload_grant(media_id)
-            print(res.code, res.data)
-            self.showMessage(str(res.data))
-            grant_id = res.data['UploadResponse']['grantId']
-            self.ui.editUploadGrant.setText(grant_id)
-        except telesocial.TelesocialError as e:
-            print(e)
+        
+        # just use the first selected media ID
+        items = self.ui.listMediaIDs.selectedItems()
+        for item in items:
+            media_id = str(items[0].text(0))
+
+            if not media_id:
+                print("Need Media ID first")
+                return
+
+            try:
+                res = self.client.media_request_upload_grant(media_id)
+                print(res.code, res.data)
+                self.showMessage(str(res.data))
+                grant_id = res.data['UploadResponse']['grantId']
+                # set to the third column of the tree widget
+                item.setText(2, grant_id)
+            except telesocial.TelesocialError as e:
+                print(e)
             
     @QtCore.Slot()
     def on_buttonMediaRefresh_released(self):
@@ -331,6 +387,7 @@ class MyMainWindow(QtGui.QMainWindow):
     @QtCore.Slot()
     def on_buttonMediaStatus_released(self):
         # get some stats about this media
+        print("getting media status")
         items = self.ui.listMediaIDs.selectedItems()
         for item in items:
             id = str(item.text(0))
@@ -339,15 +396,12 @@ class MyMainWindow(QtGui.QMainWindow):
                 res = self.client.media_status(id)
                 print(res.code, res.data)
                 self.showMessage(str(res.data))
-#                if 'MediaResponse' in res.data:
-#                    info = res.data['MediaResponse']
-#                    msg = "downloadUrl:{}\nfileSize:{}".format(info['downloadUrl'], info['fileSize'])
-#                    QtGui.QMessageBox.information(self, "Media Status", msg)
             except telesocial.TelesocialError as e:
                 print(e)
 
     @QtCore.Slot()
     def on_buttonMediaDelete_released(self):
+        print("deleting media")
         # delete all selected items
         items = self.ui.listMediaIDs.selectedItems()
         for item in items:
@@ -359,30 +413,37 @@ class MyMainWindow(QtGui.QMainWindow):
 
     @QtCore.Slot()
     def on_buttonMediaChoose_released(self):
+        print("choosing an MP3 file")
         # get an mp3 file from the FS
         fileName = QtGui.QFileDialog.getOpenFileName(self, caption="Open Media", filter="MP3 Files (*.mp3)")
         if fileName:
-            self.ui.editMediaFile.setText(fileName)
+            items = self.ui.listMediaIDs.selectedItems()
+            for item in items:
+                item.setText(3, fileName)
 
     @QtCore.Slot()
     def on_buttonMediaDownload_released(self):
+        print("downloading media file to temp.mp3")
         # retrieve and save the given media to the local FS
         items = self.ui.listMediaIDs.selectedItems()
         for item in items:
-            media_id = str(item.text())
+            media_id = str(item.text(0))
             self.client.download_file(media_id, "temp.mp3")
 
     @QtCore.Slot()
     def on_buttonMediaUpload_released(self):
         # get an mp3 file from the FS
         print("sending mp3 file to server")
-        #media_id = str(self.ui.editMediaID.text())
-        grant_id = str(self.ui.editUploadGrant.text())
-        file_name = str(self.ui.editMediaFile.text())
-        if grant_id and file_name:
-            res = self.client.upload_file(grant_id, file_name)
-            print(res)
-            self.showMessage(str(res))
+        items = self.ui.listMediaIDs.selectedItems()
+        for item in items:
+            #media_id = str(item.text(0))
+            grant_id = str(item.text(2))
+            file_name = str(item.text(3))
+            
+            if grant_id and file_name: 
+                res = self.client.upload_file(grant_id, file_name)
+                print(res)
+                self.showMessage(str(res))
 
 
 class RegisterDialog(QtGui.QDialog):

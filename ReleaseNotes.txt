@@ -1,4 +1,22 @@
 
+Changes from 0.1.0 to 0.1.1
+---------------------------
+
+- Many updates to PyQt GUI:
+
+	- Fix Conference Create
+	- Fix Conference Remove
+	- Fix Conference Mute/Unmute
+	- Upon doing a Conference Details, the children will be included for an active call
+	- Fix Media Create
+	- Fix Media Record
+	- Fix Request Upload Grant: now put the value temporarily in third column
+	- When a file is chosen, the path is put in the fourth column
+	- Change Upload to pull data from the third and fourth columns
+
+- In the telesocial Python API, add the 'participants' array to the Conference details
+
+	
 Changes from 0.0.4 to 0.1.0
 ---------------------------
 
