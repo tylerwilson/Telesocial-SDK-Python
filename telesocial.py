@@ -332,7 +332,7 @@ class SimpleClient:
             return res
         raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
 
-    def conference_add(self, conference_id, network_id, greeting_id=None):
+    def conference_add(self, conference_id, network_id, greeting_id=None, muted=False):
         """
         Adds a network_id to conference. Note we may want a wrapper that takes an array of network IDs.
 
@@ -343,6 +343,8 @@ class SimpleClient:
         @type greeting_id: string
         @param greeting_id: the media ID of a pre-recorded greeting,
             to be played to conference participants when they answer their phones
+        @type mute: bool
+        @param mute: whether to mute the given network ID upon addition
         @rtype: Response
         @return: server response
         @raise TelesocialNetworkError: on any connection problems
@@ -352,6 +354,8 @@ class SimpleClient:
         params = {'networkid': network_id, 'action': 'add'}
         if greeting_id:
             params['greetingid'] = greeting_id
+        if muted:
+            params['muted'] = 'true'
         res = self.post(uri, params)
 
         if 200 <= res.code < 300:
@@ -509,11 +513,12 @@ class SimpleClient:
 
         if 200 <= res.code < 300:
             # ensure the 'participants is present and an array
-            if 'participants' not in res.data['ConferenceDetailsResponse']:
-                res.data['ConferenceDetailsResponse']['participants'] = []
-            elif type(res.data['ConferenceDetailsResponse']['participants']) is not list:
-                datum = res.data['ConferenceDetailsResponse']['participants']
-                res.data['ConferenceDetailsResponse']['participants'] = [datum]
+            struct = res.data['ConferenceDetailsResponse']
+            if 'participants' not in struct:
+                struct['participants'] = []
+            elif type(struct['participants']) is not list:
+                datum = struct['participants']
+                struct['participants'] = [datum]
             return res
         raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
         
@@ -561,12 +566,12 @@ class SimpleClient:
             return res
         raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
 
-    def media_blast(self, media_id, network_id, greeting_id=None):
+    def media_blast(self, media_ids, network_id, greeting_id=None):
         """
         Causes the specified networkid to be called and played a previously-recorded audio clip.
 
-        @type media_id: string
-        @param media_id: the audio media to play
+        @type media_id: string or array/list of strings
+        @param media_id: the audio media ID(s) to play, in order
         @type network_id: string
         @param network_id: the network ID to call
         @type greeting_id: string
@@ -576,6 +581,10 @@ class SimpleClient:
         @raise TelesocialNetworkError: on any connection problems
         @raise TelesocialServiceError: on invalid or unexpected response
         """
+        if type(media_ids) == list:
+            media_id = "-".join(media_ids)
+        else:
+            media_id = media_ids
         uri = 'media/{0}'.format(media_id)
         params = {'networkid': network_id, 'action': 'blast'}
         if greeting_id:
@@ -656,19 +665,21 @@ class SimpleClient:
         res = self.get(uri)
 
         if res.code in [200]:
-            print(res.data)
-            # add the uploaded key/value if none passed, and make into an array if only one
-            # entry. this makes the client code a little cleaner
-            if 'uploaded' not in res.data['MediaidListResponse']:
-                res.data['MediaidListResponse']['uploaded'] = []
-            elif type(res.data['MediaidListResponse']['uploaded']) is not list:
-                datum = res.data['MediaidListResponse']['uploaded']
-                res.data['MediaidListResponse']['uploaded'] = [datum]
-            if 'recorded' not in res.data['MediaidListResponse']:
-                res.data['MediaidListResponse']['recorded'] = []
-            elif type(res.data['MediaidListResponse']['recorded']) is not list:
-                datum = res.data['MediaidListResponse']['recorded']
-                res.data['MediaidListResponse']['recorded'] = [datum]
+            # add the uploaded and recorded key/value if none passed, and make them into arrays
+            # if only one entry. this makes the client code a little cleaner
+            struct = res.data['MediaidListResponse']
+            
+            if 'uploaded' not in struct:
+                struct['uploaded'] = []
+            elif type(struct['uploaded']) is not list:
+                datum = struct['uploaded']
+                struct['uploaded'] = [datum]
+                
+            if 'recorded' not in struct:
+                struct['recorded'] = []
+            elif type(struct['recorded']) is not list:
+                datum = struct['recorded']
+                struct['recorded'] = [datum]
             return res
         raise TelesocialServiceError(res.code, deep_find(res.data, 'message'))
         

@@ -1,4 +1,14 @@
 
+Changes from 0.1.1 to 0.1.2
+---------------------------
+
+- Added muted parameter to conference_add
+
+- Modified media_blast to accept an array of media IDs in addition to a scaler media ID
+
+- Small cleanup to code which ensures some params are returned as arrays.
+
+
 Changes from 0.1.0 to 0.1.1
 ---------------------------
 
