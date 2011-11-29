@@ -3,7 +3,7 @@ Module contains classes for interacting with Telesocial REST API.
 
 @copyright: Telesocial.com
 @since: 2011-07-01
-@version: 0.0.3
+@version: 0.1.3
 """
 
 
