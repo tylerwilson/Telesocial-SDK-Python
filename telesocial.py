@@ -343,8 +343,8 @@ class SimpleClient:
         @type greeting_id: string
         @param greeting_id: the media ID of a pre-recorded greeting,
             to be played to conference participants when they answer their phones
-        @type mute: bool
-        @param mute: whether to mute the given network ID upon addition
+        @type muted: bool
+        @param muted: whether to mute the given network ID upon addition
         @rtype: Response
         @return: server response
         @raise TelesocialNetworkError: on any connection problems
@@ -570,8 +570,8 @@ class SimpleClient:
         """
         Causes the specified networkid to be called and played a previously-recorded audio clip.
 
-        @type media_id: string or array/list of strings
-        @param media_id: the audio media ID(s) to play, in order
+        @type media_ids: string or array/list of strings
+        @param media_ids: the audio media ID(s) to play, in order
         @type network_id: string
         @param network_id: the network ID to call
         @type greeting_id: string
